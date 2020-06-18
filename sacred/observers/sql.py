@@ -4,6 +4,7 @@
 import json
 from threading import Lock
 import warnings
+from sqlalchemy.exc import IntegrityError
 
 from sacred.commandline_options import cli_option
 from sacred.observers.base import RunObserver
@@ -76,26 +77,34 @@ class SqlObserver(RunObserver):
     ):
         from .sql_bases import Base, Experiment, Host, Run
 
-        Base.metadata.create_all(self.engine)
-        sql_exp = Experiment.get_or_create(ex_info, self.session)
-        sql_host = Host.get_or_create(host_info, self.session)
-        if _id is None:
-            i = self.session.query(Run).order_by(Run.id.desc()).first()
-            _id = 0 if i is None else i.id + 1
+        while True:
+            Base.metadata.create_all(self.engine)
+            sql_exp = Experiment.get_or_create(ex_info, self.session)
+            sql_host = Host.get_or_create(host_info, self.session)
+            if _id is None:
+                i = self.session.query(Run).order_by(Run.id.desc()).first()
+                _id = 0 if i is None else i.id + 1
 
-        self.run = Run(
-            run_id=str(_id),
-            config=json.dumps(flatten(config)),
-            command=command,
-            priority=meta_info.get("priority", 0),
-            comment=meta_info.get("comment", ""),
-            experiment=sql_exp,
-            host=sql_host,
-            status=status,
-            **kwargs,
-        )
-        self.session.add(self.run)
-        self.save()
+            self.run = Run(
+                run_id=str(_id),
+                config=json.dumps(flatten(config)),
+                command=command,
+                priority=meta_info.get("priority", 0),
+                comment=meta_info.get("comment", ""),
+                experiment=sql_exp,
+                host=sql_host,
+                status=status,
+                **kwargs,
+            )
+            self.session.add(self.run)
+
+            with self.lock:
+                try:
+                    self.session.commit()
+                    break
+                except IntegrityError:
+                    self.session.rollback()
+
         return _id or self.run.run_id
 
     def heartbeat_event(self, info, captured_out, beat_time, result):
