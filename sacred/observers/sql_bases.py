@@ -43,21 +43,29 @@ class Repository(Base):
     __tablename__ = "repository"
 
     @classmethod
-    def get_or_create(cls, url, commit, dirty, session):
+    def get_or_create(cls, url, commit, dirty, branch, session):
         instance = (
-            session.query(cls).filter_by(url=url, commit=commit, dirty=dirty).first()
+            session.query(cls)
+            .filter_by(url=url, commit=commit, dirty=dirty, branch=branch)
+            .first()
         )
         if instance:
             return instance
-        return cls(url=url, commit=commit, dirty=dirty)
+        return cls(url=url, commit=commit, dirty=dirty, branch=branch)
 
     repository_id = sa.Column(sa.Integer, primary_key=True)
     url = sa.Column(sa.String(2048))
     commit = sa.Column(sa.String(40))
     dirty = sa.Column(sa.Boolean)
+    branch = sa.Column(sa.String(64))
 
     def to_json(self):
-        return {"url": self.url, "commit": self.commit, "dirty": self.dirty}
+        return {
+            "url": self.url,
+            "commit": self.commit,
+            "dirty": self.dirty,
+            "branch": self.branch,
+        }
 
 
 class Dependency(Base):
@@ -198,7 +206,7 @@ class Experiment(Base):
         repositories = set()
         for r in ex_info["repositories"]:
             repository = Repository.get_or_create(
-                r["url"], r["commit"], r["dirty"], session
+                r["url"], r["commit"], r["dirty"], r["branch"], session
             )
             session.add(repository)
             repositories.add(repository)

@@ -414,9 +414,11 @@ def get_commit_if_possible(filename, save_git_info):
             The commit hash
         is_dirty: bool
             True if there are uncommitted changes in the repository
+        branch: str
+            The name of the active branch
     """
     if save_git_info is False:
-        return None, None, None
+        return None, None, None, None
 
     try:
         from git import Repo, InvalidGitRepositoryError
@@ -432,24 +434,26 @@ def get_commit_if_possible(filename, save_git_info):
     try:
         repo = Repo(directory, search_parent_directories=True)
     except InvalidGitRepositoryError:
-        return None, None, None
+        return None, None, None, None
     try:
         path = repo.remote().url
     except ValueError:
         path = "git:/" + repo.working_dir
     is_dirty = repo.is_dirty()
     commit = repo.head.commit.hexsha
-    return path, commit, is_dirty
+    branch = repo.active_branch.name
+    return path, commit, is_dirty, branch
 
 
 @functools.total_ordering
 class Source:
-    def __init__(self, filename, digest, repo, commit, isdirty):
+    def __init__(self, filename, digest, repo, commit, isdirty, branch):
         self.filename = os.path.realpath(filename)
         self.digest = digest
         self.repo = repo
         self.commit = commit
         self.is_dirty = isdirty
+        self.branch = branch
 
     @staticmethod
     def create(filename, save_git_info=True):
@@ -457,8 +461,10 @@ class Source:
             raise ValueError('invalid filename or file not found "{}"'.format(filename))
 
         main_file = get_py_file_if_possible(os.path.abspath(filename))
-        repo, commit, is_dirty = get_commit_if_possible(main_file, save_git_info)
-        return Source(main_file, get_digest(main_file), repo, commit, is_dirty)
+        repo, commit, is_dirty, branch = get_commit_if_possible(
+            main_file, save_git_info
+        )
+        return Source(main_file, get_digest(main_file), repo, commit, is_dirty, branch)
 
     def to_json(self, base_dir=None):
         if base_dir:
