@@ -224,7 +224,7 @@ class Experiment(Base):
     experiment_id = sa.Column(sa.Integer, primary_key=True)
     name = sa.Column(sa.String(32))
     md5sum = sa.Column(sa.String(32))
-    base_dir = sa.Column(sa.String(64))
+    base_dir = sa.Column(sa.String(260))
     sources = sa.orm.relationship(
         "Source", secondary=experiment_source_association, backref="experiments"
     )
